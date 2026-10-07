@@ -1,14 +1,77 @@
 """FastAPI route definitions for AskPodcast."""
 import json
-from typing import AsyncGenerator
+import os
+from pathlib import Path
+from typing import AsyncGenerator, cast
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
+from pydantic import BaseModel, Field
 
 from app.agent.graph import corrective_rag_agent
-from app.schemas import AskRequest, AskResponse, Citation
+from app.ingestion import (
+    captions_to_segments,
+    chunk_segments,
+    extract_video_id,
+    fetch_raw_captions,
+    fetch_video_title,
+)
+from app.schemas import (
+    AskRequest,
+    AskResponse,
+    Citation,
+    EpisodeSummary,
+    IngestRequest,
+    IngestResponse,
+    Show,
+)
+from app.vectorstore import index_chunks
 
 router = APIRouter()
+
+
+# --- Structured Output Schema for Summarization ---
+class EpisodeAnalysis(BaseModel):
+    """Pydantic schema for structured multi-tier summarization and entity extraction."""
+    short_summary: str = Field(description="1-2 sentence executive overview.")
+    long_summary: str = Field(description="2-3 paragraph detailed breakdown of main themes and mechanisms.")
+    key_takeaways: list[str] = Field(description="4-6 actionable takeaways.")
+    keywords: list[str] = Field(description="10-15 core scientific concepts, protocols, or entities.")
+
+
+def _get_chat_llm(temperature: float = 0.2) -> ChatGoogleGenerativeAI:
+    model_name = os.environ.get("CHAT_MODEL", "gemini-3.8-flash")
+    return ChatGoogleGenerativeAI(model=model_name, temperature=temperature)
+
+
+def _analyze_episode(full_text: str, title: str) -> EpisodeAnalysis:
+    """Generate structured multi-tier summaries and keywords using Gemini."""
+    llm = _get_chat_llm(temperature=0.2)
+    structured_analyzer = llm.with_structured_output(EpisodeAnalysis)
+
+    prompt = ChatPromptTemplate.from_messages([
+        (
+            "system",
+            "You are an expert scientific editor and podcast analyst. "
+            "Analyze the provided podcast transcript and produce a structured breakdown:\n"
+            "1. A concise 1-2 sentence short summary.\n"
+            "2. A 2-3 paragraph comprehensive long summary.\n"
+            "3. 4-6 high-impact actionable key takeaways.\n"
+            "4. 10-15 key scientific concepts, entities, and search tags.",
+        ),
+        ("human", "Episode Title: {title}\n\nTranscript Content:\n{transcript}"),
+    ])
+
+    chain = prompt | structured_analyzer
+    # Cap transcript at ~40,000 words to ensure rapid execution within token bounds
+    trimmed = " ".join(full_text.split()[:40000])
+    result = chain.invoke({"title": title, "transcript": trimmed})
+
+    if isinstance(result, EpisodeAnalysis):
+        return result
+    return EpisodeAnalysis.model_validate(result)
 
 
 def _build_citations(documents: list) -> list[Citation]:
@@ -40,10 +103,121 @@ def _build_citations(documents: list) -> list[Citation]:
     return citations
 
 
+# ==============================================================================
+# Endpoints
+# ==============================================================================
 @router.get("/health")
 def health_check() -> dict[str, str]:
     """Health check probe for container readiness."""
     return {"status": "ok", "app": "AskPodcast"}
+
+
+@router.get("/episodes", response_model=list[EpisodeSummary])
+def list_episodes() -> list[EpisodeSummary]:
+    """List all indexed episodes currently stored in the knowledge library."""
+    episodes: list[EpisodeSummary] = []
+    raw_dir = Path("data/raw")
+    if not raw_dir.exists():
+        return episodes
+
+    for json_file in raw_dir.glob("*/*.json"):
+        try:
+            data = json.loads(json_file.read_text())
+            ep_id = data.get("episode_id", json_file.stem)
+            episodes.append(
+                EpisodeSummary(
+                    episode_id=ep_id,
+                    episode_title=data.get("title", f"Episode {ep_id}"),
+                    show=data.get("show", "huberman_lab"),
+                    speaker=data.get("speaker", "Andrew Huberman"),
+                    url=f"https://youtu.be/{ep_id}",
+                    short_summary=data.get("short_summary"),
+                    long_summary=data.get("long_summary"),
+                    key_takeaways=data.get("key_takeaways", []),
+                    keywords=data.get("keywords", []),
+                )
+            )
+        except Exception:
+            continue
+    return episodes
+
+
+@router.post("/ingest", response_model=IngestResponse)
+def ingest_episode(request: IngestRequest) -> IngestResponse:
+    """Ingest a YouTube episode, chunk transcript, analyze, and index into ChromaDB."""
+    video_id = extract_video_id(request.video_url_or_id)
+    if not video_id:
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL or video ID.")
+
+    try:
+        cache_dir = Path("data/raw") / request.show
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / f"{video_id}.json"
+
+        # 1. Load or fetch transcript
+        if cache_file.exists():
+            payload = json.loads(cache_file.read_text())
+            title = payload.get("title", f"Episode {video_id}")
+            captions = payload.get("captions", [])
+        else:
+            title = fetch_video_title(video_id)
+            captions = fetch_raw_captions(video_id)
+            payload = {
+                "show": request.show,
+                "episode_id": video_id,
+                "title": title,
+                "speaker": request.speaker,
+                "captions": captions,
+            }
+            cache_file.write_text(json.dumps(payload, indent=2))
+
+        # 2. Build segments & chunks
+        segments = captions_to_segments(
+            captions,
+            show=cast(Show, request.show),
+            episode_id=video_id,
+            episode_title=title,
+            speaker=request.speaker,
+        )
+        chunks = chunk_segments(segments)
+        indexed_count = index_chunks(chunks)
+
+        # 3. Load or generate multi-tier summary and keywords
+        if "short_summary" in payload and payload["short_summary"]:
+            short_summary = payload["short_summary"]
+            long_summary = payload.get("long_summary", "")
+            key_takeaways = payload.get("key_takeaways", [])
+            keywords = payload.get("keywords", [])
+        else:
+            full_text = " ".join(s.text for s in segments)
+            analysis = _analyze_episode(full_text, title)
+            short_summary = analysis.short_summary
+            long_summary = analysis.long_summary
+            key_takeaways = analysis.key_takeaways
+            keywords = analysis.keywords
+
+            # Cache the analysis into the JSON file
+            payload["short_summary"] = short_summary
+            payload["long_summary"] = long_summary
+            payload["key_takeaways"] = key_takeaways
+            payload["keywords"] = keywords
+            cache_file.write_text(json.dumps(payload, indent=2))
+
+        return IngestResponse(
+            status="success",
+            episode_id=video_id,
+            episode_title=title,
+            segments_parsed=len(segments),
+            chunks_indexed=indexed_count,
+            short_summary=short_summary,
+            long_summary=long_summary,
+            key_takeaways=key_takeaways,
+            keywords=keywords,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to ingest episode: {str(e)}")
 
 
 @router.post("/ask", response_model=AskResponse)

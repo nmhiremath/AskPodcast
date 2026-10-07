@@ -29,6 +29,20 @@ Sample raw response returned by `fetch_raw_captions(video_id)`:
 """
 
 
+def extract_video_id(url_or_id: str) -> str:
+    """Extract standard 11-char YouTube video ID from a URL or raw ID."""
+    clean = url_or_id.strip()
+    patterns = [
+        r"(?:v=|\/)([0-9A-Za-z_-]{11})(?:[&?]|$)",
+        r"^([0-9A-Za-z_-]{11})$",
+    ]
+    for pat in patterns:
+        match = re.search(pat, clean)
+        if match:
+            return match.group(1)
+    return clean
+
+
 def fetch_video_title(video_id: str) -> str:
     """Fetch video title using YouTube's public oEmbed endpoint (no API key needed)."""
     import httpx
