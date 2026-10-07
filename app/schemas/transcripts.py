@@ -1,8 +1,4 @@
-"""Data contracts for transcript ingestion.
-
-A Segment is ONE speaker turn: the smallest unit we parse from a raw transcript.
-(Chunks, which group segments for embedding, come in the next step.)
-"""
+"""Transcript domain models: Segment, Chunk, and Show."""
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -48,7 +44,7 @@ class Chunk(BaseModel):
         return f"{s // 3600:02d}:{s % 3600 // 60:02d}:{s % 60:02d}"
 
     def to_metadata(self) -> dict:
-        """Flatten fields for ChromaDB metadata (Chroma requires scalar values: str, int, float, bool)."""
+        """Flatten fields for ChromaDB metadata (scalar values: str, int, float, bool)."""
         return {
             "chunk_id": self.chunk_id,
             "show": self.show,

@@ -6,8 +6,7 @@ import json
 from pathlib import Path
 import sys
 
-from app.chunking import chunk_segments
-from app.ingestion.youtube import captions_to_segments, fetch_raw_captions, fetch_video_title
+from app.ingestion import captions_to_segments, chunk_segments, fetch_raw_captions, fetch_video_title
 
 video_id = sys.argv[1]
 

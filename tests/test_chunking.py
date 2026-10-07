@@ -1,4 +1,4 @@
-from app.chunking import chunk_segments
+from app.ingestion import chunk_segments
 from app.schemas import Segment
 
 BASE_META = dict(

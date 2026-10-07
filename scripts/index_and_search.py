@@ -6,8 +6,7 @@ import json
 from pathlib import Path
 import sys
 
-from app.chunking import chunk_segments
-from app.ingestion.youtube import captions_to_segments
+from app.ingestion import captions_to_segments, chunk_segments
 from app.vectorstore import get_vectorstore, index_chunks, similarity_search_with_scores
 
 if len(sys.argv) < 2:

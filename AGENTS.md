@@ -39,22 +39,35 @@ AskPodcast/
 │       └── huberman_lab/
 ├── app/
 │   ├── __init__.py
-│   ├── schemas.py             # Pydantic models: Segment, Chunk, Show
-│   ├── chunking.py            # Pure sliding-window chunking
-│   ├── ingestion/
+│   ├── schemas/               # Pydantic models (data & API)
 │   │   ├── __init__.py
+│   │   ├── transcripts.py     # Segment, Chunk, Show
+│   │   └── api.py             # AskRequest, AskResponse, Citation
+│   ├── ingestion/             # Transcript pipelines
+│   │   ├── __init__.py
+│   │   ├── chunking.py        # Pure sliding-window chunking
 │   │   └── youtube.py         # YouTube adapter (oEmbed title, caption cleaning)
-│   ├── vectorstore.py         # (Phase 2) ChromaDB wrapper & embeddings
-│   ├── agent/                 # (Phase 3) LangGraph Self-RAG / CRAG workflow
-│   └── api.py                 # (Phase 4) FastAPI endpoints
+│   ├── vectorstore.py         # ChromaDB wrapper & embeddings
+│   ├── agent/                 # LangGraph Self-RAG / CRAG workflow
+│   │   ├── __init__.py
+│   │   ├── state.py           # AgentState TypedDict
+│   │   ├── nodes.py           # retrieve, grade, rewrite, generate
+│   │   └── graph.py           # StateGraph & circuit-breaker
+│   └── api/                   # FastAPI endpoints
+│       ├── __init__.py        # FastAPI app mounting router
+│       └── routes.py          # /health, /ask, /ask/stream
 ├── scripts/
 │   ├── smoke_test_gemini.py   # Connectivity verification script
 │   ├── list_models.py         # Inspect supported models for active API key
-│   └── fetch_episode.py       # CLI tool to download and cache episode transcript
+│   ├── fetch_episode.py       # CLI tool to download and cache episode transcript
+│   ├── index_and_search.py    # Ingests cached episode into ChromaDB & searches
+│   └── ask_agent.py           # Interactive CLI runner for Corrective RAG agent
 └── tests/
     ├── test_schemas.py        # Contract validation tests
     ├── test_youtube_adapter.py# Offline adapter tests
-    └── test_chunking.py       # Boundary & speaker chunk tests
+    ├── test_chunking.py       # Boundary & speaker chunk tests
+    ├── test_agent.py          # Graph routing & circuit-breaker tests
+    └── test_api.py            # API health & validation tests
 ```
 
 ---
