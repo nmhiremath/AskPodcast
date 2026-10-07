@@ -1,0 +1,26 @@
+# Python 3.11+ required (developed on 3.13).
+# Bounds = known-good major versions. Exact pins come later via `pip freeze` for Docker.
+
+# --- API layer ---
+fastapi>=0.142,<1
+uvicorn[standard]>=0.54
+
+# --- LLM orchestration ---
+langchain>=1.4,<2
+langchain-core>=1.6,<2
+langchain-google-genai>=4.4,<5
+google-genai>=2.28,<3
+langchain-chroma>=1.1,<2
+langgraph>=1.2,<2
+
+# --- Vector store ---
+chromadb>=1.5,<2
+
+# --- Config / validation ---
+pydantic>=2.13,<3
+pydantic-settings>=2.11,<3
+python-dotenv>=1.2
+
+# --- Dev / testing ---
+pytest>=9.1
+httpx>=0.28
