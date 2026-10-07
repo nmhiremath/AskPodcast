@@ -16,6 +16,9 @@ langgraph>=1.2,<2
 # --- Vector store ---
 chromadb>=1.5,<2
 
+# --- Ingestion ---
+youtube-transcript-api>=1.0
+
 # --- Config / validation ---
 pydantic>=2.13,<3
 pydantic-settings>=2.11,<3
