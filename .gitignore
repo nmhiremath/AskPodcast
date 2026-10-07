@@ -6,3 +6,5 @@ __pycache__/
 chroma_db/
 data/raw/
 .DS_Store
+.vscode/*
+!.vscode/settings.json
