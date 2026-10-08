@@ -130,7 +130,7 @@ The system abstracts model initialization via `app/factory.py`, making it provid
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/AskPodcast.git
+   git clone https://github.com/nmhiremath/AskPodcast.git
    cd AskPodcast
    ```
 
