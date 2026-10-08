@@ -5,6 +5,7 @@ START -> retrieve -> grade_documents -> [conditional_edge]
                                            |-> (relevant docs exist OR max rewrites reached) -> generate -> END
                                            |-> (NO relevant docs AND rewrites < max) ----------> rewrite_query -> retrieve
 """
+
 from typing import Any, Literal, cast
 
 from langgraph.graph import END, START, StateGraph

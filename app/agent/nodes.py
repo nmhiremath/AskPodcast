@@ -1,20 +1,20 @@
 """Graph nodes for Corrective RAG: retrieve, grade, rewrite, and generate."""
-import os
+
 from typing import Literal
 
 from langchain_core.documents import Document
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
 from app.agent.state import AgentState
+from app.factory import get_chat_model
 from app.vectorstore import get_vectorstore
 
 
-def _get_chat_llm(temperature: float = 0.0) -> ChatGoogleGenerativeAI:
-    """Helper to instantiate our configured Gemini chat model."""
-    model_name = os.environ.get("CHAT_MODEL", "gemini-3.8-flash")
-    return ChatGoogleGenerativeAI(model=model_name, temperature=temperature)
+def _get_chat_llm(temperature: float = 0.0) -> BaseChatModel:
+    """Helper to instantiate the active chat model configured in .env."""
+    return get_chat_model(temperature=temperature)
 
 
 # ==============================================================================
@@ -33,6 +33,7 @@ def retrieve(state: AgentState) -> dict:
 # ==============================================================================
 class GradeResult(BaseModel):
     """Pydantic schema enforcing a strict binary score from the LLM."""
+
     binary_score: Literal["yes", "no"] = Field(
         description="Relevance score: 'yes' if chunk is relevant to the question, 'no' otherwise."
     )
@@ -47,27 +48,27 @@ def grade_documents(state: AgentState) -> dict:
     # Guarantee structured output parsed into GradeResult
     structured_grader = llm.with_structured_output(GradeResult)
 
-    grader_prompt = ChatPromptTemplate.from_messages([
-        (
-            "system",
-            "You are a strict relevance grader assessing whether a podcast transcript excerpt "
-            "is relevant to the user question. Return 'yes' if the excerpt contains information "
-            "that helps answer the question, or 'no' if it is irrelevant.",
-        ),
-        (
-            "human",
-            "User Question:\n{question}\n\nTranscript Excerpt:\n{context}",
-        ),
-    ])
+    grader_prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a strict relevance grader assessing whether a podcast transcript excerpt "
+                "is relevant to the user question. Return 'yes' if the excerpt contains information "
+                "that helps answer the question, or 'no' if it is irrelevant.",
+            ),
+            (
+                "human",
+                "User Question:\n{question}\n\nTranscript Excerpt:\n{context}",
+            ),
+        ]
+    )
 
     grader_chain = grader_prompt | structured_grader
 
     relevant_docs: list[Document] = []
     for doc in documents:
         try:
-            res = grader_chain.invoke(
-                {"question": question, "context": doc.page_content}
-            )
+            res = grader_chain.invoke({"question": question, "context": doc.page_content})
             score = ""
             if isinstance(res, GradeResult):
                 score = res.binary_score
@@ -95,16 +96,18 @@ def rewrite_query(state: AgentState) -> dict:
 
     llm = _get_chat_llm(temperature=0.2)
 
-    prompt = ChatPromptTemplate.from_messages([
-        (
-            "system",
-            "You are a search query optimizer for podcast transcripts. "
-            "The initial search returned zero relevant excerpts. "
-            "Rephrase the question into a direct, keyword-rich search query "
-            "better suited for vector semantic retrieval. Output ONLY the new query.",
-        ),
-        ("human", "Original Question:\n{question}"),
-    ])
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a search query optimizer for podcast transcripts. "
+                "The initial search returned zero relevant excerpts. "
+                "Rephrase the question into a direct, keyword-rich search query "
+                "better suited for vector semantic retrieval. Output ONLY the new query.",
+            ),
+            ("human", "Original Question:\n{question}"),
+        ]
+    )
 
     chain = prompt | llm
     response = chain.invoke({"question": question})
@@ -134,26 +137,26 @@ def generate(state: AgentState) -> dict:
         ts = meta.get("timestamp", "00:00:00")
         title = meta.get("episode_title", "Unknown Episode")
         speaker = meta.get("speaker", "Speaker")
-        formatted_context_blocks.append(
-            f"[{title} | {speaker} @ {ts}]:\n\"{doc.page_content}\""
-        )
+        formatted_context_blocks.append(f'[{title} | {speaker} @ {ts}]:\n"{doc.page_content}"')
     context_str = "\n\n".join(formatted_context_blocks)
 
     llm = _get_chat_llm(temperature=0.1)
 
-    prompt = ChatPromptTemplate.from_messages([
-        (
-            "system",
-            "You are an expert AI assistant answering questions about podcast episodes. "
-            "Answer the question using ONLY the transcript excerpts provided below.\n\n"
-            "RULES:\n"
-            "1. Ground all claims strictly in the excerpts.\n"
-            "2. Cite the exact timestamp and episode title for your points (e.g. `[00:57:54]`).\n"
-            "3. If the excerpts do not contain the answer, state that honestly.\n\n"
-            "Excerpts:\n{context}",
-        ),
-        ("human", "{question}"),
-    ])
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are an expert AI assistant answering questions about podcast episodes. "
+                "Answer the question using ONLY the transcript excerpts provided below.\n\n"
+                "RULES:\n"
+                "1. Ground all claims strictly in the excerpts.\n"
+                "2. Cite the exact timestamp and episode title for your points (e.g. `[00:57:54]`).\n"
+                "3. If the excerpts do not contain the answer, state that honestly.\n\n"
+                "Excerpts:\n{context}",
+            ),
+            ("human", "{question}"),
+        ]
+    )
 
     chain = prompt | llm
     reply = chain.invoke({"question": question, "context": context_str})

@@ -1,0 +1,23 @@
+# Virtual environment & caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Secrets & local environment variables
+.env
+.env.*
+!.env.example
+
+# Git metadata
+.git/
+.gitignore
+
+# Local databases & downloads (mounted via docker-compose volumes instead)
+chroma_db/
+data/raw/
+
+# IDE & agent artifacts
+.vscode/
+.agents/
+.DS_Store

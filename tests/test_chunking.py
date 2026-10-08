@@ -10,7 +10,15 @@ BASE_META = dict(
 
 
 def _make_seg(text: str, start: float, end: float, speaker: str = "Andrew Huberman") -> Segment:
-    return Segment(**(BASE_META | {"text": text, "start_seconds": start, "end_seconds": end, "speaker": speaker}))
+    return Segment(
+        show="huberman_lab",
+        episode_id="ep-101",
+        episode_title="Dopamine Basics",
+        speaker=speaker,
+        text=text,
+        start_seconds=start,
+        end_seconds=end,
+    )
 
 
 def test_chunking_preserves_timestamp_boundaries():

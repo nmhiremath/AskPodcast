@@ -1,9 +1,11 @@
 """API request and response schemas."""
+
 from pydantic import BaseModel, Field
 
 
 class Citation(BaseModel):
     """Structured citation metadata for clickable UI elements."""
+
     episode_title: str
     episode_id: str
     speaker: str
@@ -14,11 +16,13 @@ class Citation(BaseModel):
 
 class AskRequest(BaseModel):
     """Incoming user query payload."""
+
     question: str = Field(min_length=3, max_length=500, description="Question to ask the podcast archive.")
 
 
 class AskResponse(BaseModel):
     """Structured answer response with citations and execution metadata."""
+
     question: str
     answer: str
     citations: list[Citation] = Field(default_factory=list)
@@ -28,6 +32,7 @@ class AskResponse(BaseModel):
 
 class IngestRequest(BaseModel):
     """Payload to ingest and index a YouTube episode."""
+
     video_url_or_id: str = Field(description="YouTube video ID or full YouTube URL.")
     show: str = Field(default="huberman_lab", description="Podcast show key.")
     speaker: str = Field(default="Andrew Huberman", description="Primary speaker or host & guest name.")
@@ -35,6 +40,7 @@ class IngestRequest(BaseModel):
 
 class IngestResponse(BaseModel):
     """Result of episode ingestion, indexing, and multi-tier summarization."""
+
     status: str
     episode_id: str
     episode_title: str
@@ -48,6 +54,7 @@ class IngestResponse(BaseModel):
 
 class EpisodeSummary(BaseModel):
     """Manifest item for an indexed episode in the knowledge library."""
+
     episode_id: str
     episode_title: str
     show: str
@@ -57,4 +64,3 @@ class EpisodeSummary(BaseModel):
     long_summary: str | None = None
     key_takeaways: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
-

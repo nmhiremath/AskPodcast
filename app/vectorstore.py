@@ -2,33 +2,33 @@
 
 Persists collections locally to disk and supports filtered similarity search.
 """
-import os
+
 from typing import Any
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
+from app.factory import get_collection_name, get_embedding_model
 from app.schemas import Chunk
 
 load_dotenv()
 
 DEFAULT_DB_DIR = "chroma_db"
-DEFAULT_COLLECTION = "podcast_transcripts"
-
-
-def get_embedding_model() -> GoogleGenerativeAIEmbeddings:
-    """Load embedding model configured in .env."""
-    model_name = os.environ.get("EMBEDDING_MODEL", "models/gemini-embedding-2")
-    return GoogleGenerativeAIEmbeddings(model=model_name)
 
 
 def get_vectorstore(
     persist_directory: str = DEFAULT_DB_DIR,
-    collection_name: str = DEFAULT_COLLECTION,
+    collection_name: str | None = None,
 ) -> Chroma:
-    """Create or connect to a local persistent ChromaDB collection."""
+    """Create or connect to a local persistent ChromaDB collection.
+
+    If collection_name is None, dynamically derives the collection name
+    from the active embedding model to ensure vector dimension safety.
+    """
+    if collection_name is None:
+        collection_name = get_collection_name()
+
     embeddings = get_embedding_model()
     return Chroma(
         collection_name=collection_name,
@@ -39,7 +39,7 @@ def get_vectorstore(
 
 def index_chunks(chunks: list[Chunk], vectorstore: Chroma | None = None) -> int:
     """Convert Chunks into LangChain Documents and index them in ChromaDB.
-    
+
     Returns the number of indexed chunks.
     """
     if not chunks:

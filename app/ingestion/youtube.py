@@ -3,6 +3,7 @@
 Design: the network call (`fetch_raw_captions`) is separate from the pure
 transform (`captions_to_segments`), so the transform is unit-testable offline.
 """
+
 import re
 
 from youtube_transcript_api import YouTubeTranscriptApi

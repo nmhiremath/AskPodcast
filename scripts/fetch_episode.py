@@ -2,11 +2,17 @@
 
 Run (from project root):  python -m scripts.fetch_episode <video_id>
 """
-import json
-from pathlib import Path
-import sys
 
-from app.ingestion import captions_to_segments, chunk_segments, fetch_raw_captions, fetch_video_title
+import json
+import sys
+from pathlib import Path
+
+from app.ingestion import (
+    captions_to_segments,
+    chunk_segments,
+    fetch_raw_captions,
+    fetch_video_title,
+)
 
 video_id = sys.argv[1]
 

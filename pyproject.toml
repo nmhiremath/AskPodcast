@@ -6,7 +6,14 @@ testpaths = ["tests"]
 python-interpreter-path = ".venv/bin/python"
 
 [tool.pyright]
+pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
 
+[tool.ruff]
+line-length = 120
+target-version = "py313"
 
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501", "B008", "B904"]

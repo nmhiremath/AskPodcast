@@ -1,7 +1,9 @@
 """Tests for LangGraph agent structure and routing logic."""
+
 from langchain_core.documents import Document
 
 from app.agent.graph import MAX_REWRITES, build_graph, decide_to_generate
+from app.agent.state import AgentState
 
 
 def test_graph_structure():
@@ -13,7 +15,7 @@ def test_graph_structure():
 
 
 def test_router_routes_to_generate_when_docs_present():
-    state = {
+    state: AgentState = {
         "question": "test",
         "documents": [],
         "relevant_documents": [Document(page_content="relevant text")],
@@ -25,7 +27,7 @@ def test_router_routes_to_generate_when_docs_present():
 
 
 def test_router_routes_to_rewrite_when_no_relevant_docs():
-    state = {
+    state: AgentState = {
         "question": "test",
         "documents": [],
         "relevant_documents": [],
@@ -37,7 +39,7 @@ def test_router_routes_to_rewrite_when_no_relevant_docs():
 
 
 def test_router_hits_circuit_breaker_after_max_rewrites():
-    state = {
+    state: AgentState = {
         "question": "test",
         "documents": [],
         "relevant_documents": [],

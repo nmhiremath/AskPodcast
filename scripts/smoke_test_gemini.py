@@ -2,6 +2,7 @@
 
 Run:  python scripts/smoke_test_gemini.py
 """
+
 import os
 import sys
 
@@ -13,7 +14,7 @@ load_dotenv()  # reads .env into os.environ
 if not os.getenv("GOOGLE_API_KEY"):
     sys.exit("❌ GOOGLE_API_KEY missing. Copy .env.example -> .env and add your key.")
 
-chat_model = os.environ["CHAT_MODEL"]        # fail loudly if unset: no stale defaults
+chat_model = os.environ["CHAT_MODEL"]  # fail loudly if unset: no stale defaults
 embed_model = os.environ["EMBEDDING_MODEL"]
 
 # 1) Generation: the "G" in RAG

@@ -1,4 +1,5 @@
 """API integration tests."""
+
 from fastapi.testclient import TestClient
 
 from app.api import app
@@ -36,4 +37,3 @@ def test_ingest_validation_rejects_empty_video_id():
     """Verify /ingest rejects empty video ID."""
     response = client.post("/ingest", json={"video_url_or_id": ""})
     assert response.status_code == 400
-

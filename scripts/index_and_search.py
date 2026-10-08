@@ -2,9 +2,10 @@
 
 Run:  python -m scripts.index_and_search QmOF0crdyRU "What causes a dopamine crash?"
 """
+
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 from app.ingestion import captions_to_segments, chunk_segments
 from app.vectorstore import get_vectorstore, index_chunks, similarity_search_with_scores

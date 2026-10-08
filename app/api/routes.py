@@ -1,16 +1,18 @@
 """FastAPI route definitions for AskPodcast."""
+
 import json
-import os
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import AsyncGenerator, cast
+from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
 from app.agent.graph import corrective_rag_agent
+from app.factory import get_chat_model
 from app.ingestion import (
     captions_to_segments,
     chunk_segments,
@@ -35,15 +37,15 @@ router = APIRouter()
 # --- Structured Output Schema for Summarization ---
 class EpisodeAnalysis(BaseModel):
     """Pydantic schema for structured multi-tier summarization and entity extraction."""
+
     short_summary: str = Field(description="1-2 sentence executive overview.")
     long_summary: str = Field(description="2-3 paragraph detailed breakdown of main themes and mechanisms.")
     key_takeaways: list[str] = Field(description="4-6 actionable takeaways.")
     keywords: list[str] = Field(description="10-15 core scientific concepts, protocols, or entities.")
 
 
-def _get_chat_llm(temperature: float = 0.2) -> ChatGoogleGenerativeAI:
-    model_name = os.environ.get("CHAT_MODEL", "gemini-3.8-flash")
-    return ChatGoogleGenerativeAI(model=model_name, temperature=temperature)
+def _get_chat_llm(temperature: float = 0.2) -> BaseChatModel:
+    return get_chat_model(temperature=temperature)
 
 
 def _analyze_episode(full_text: str, title: str) -> EpisodeAnalysis:
@@ -51,18 +53,20 @@ def _analyze_episode(full_text: str, title: str) -> EpisodeAnalysis:
     llm = _get_chat_llm(temperature=0.2)
     structured_analyzer = llm.with_structured_output(EpisodeAnalysis)
 
-    prompt = ChatPromptTemplate.from_messages([
-        (
-            "system",
-            "You are an expert scientific editor and podcast analyst. "
-            "Analyze the provided podcast transcript and produce a structured breakdown:\n"
-            "1. A concise 1-2 sentence short summary.\n"
-            "2. A 2-3 paragraph comprehensive long summary.\n"
-            "3. 4-6 high-impact actionable key takeaways.\n"
-            "4. 10-15 key scientific concepts, entities, and search tags.",
-        ),
-        ("human", "Episode Title: {title}\n\nTranscript Content:\n{transcript}"),
-    ])
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are an expert scientific editor and podcast analyst. "
+                "Analyze the provided podcast transcript and produce a structured breakdown:\n"
+                "1. A concise 1-2 sentence short summary.\n"
+                "2. A 2-3 paragraph comprehensive long summary.\n"
+                "3. 4-6 high-impact actionable key takeaways.\n"
+                "4. 10-15 key scientific concepts, entities, and search tags.",
+            ),
+            ("human", "Episode Title: {title}\n\nTranscript Content:\n{transcript}"),
+        ]
+    )
 
     chain = prompt | structured_analyzer
     # Cap transcript at ~40,000 words to ensure rapid execution within token bounds
@@ -155,10 +159,11 @@ def ingest_episode(request: IngestRequest) -> IngestResponse:
         cache_file = cache_dir / f"{video_id}.json"
 
         # 1. Load or fetch transcript
+        payload: dict[str, Any]
         if cache_file.exists():
             payload = json.loads(cache_file.read_text())
-            title = payload.get("title", f"Episode {video_id}")
-            captions = payload.get("captions", [])
+            title = str(payload.get("title", f"Episode {video_id}"))
+            captions = list(payload.get("captions", []))
         else:
             title = fetch_video_title(video_id)
             captions = fetch_raw_captions(video_id)
@@ -183,11 +188,18 @@ def ingest_episode(request: IngestRequest) -> IngestResponse:
         indexed_count = index_chunks(chunks)
 
         # 3. Load or generate multi-tier summary and keywords
-        if "short_summary" in payload and payload["short_summary"]:
+        short_summary: str
+        long_summary: str
+        key_takeaways: list[str]
+        keywords: list[str]
+
+        if "short_summary" in payload and isinstance(payload["short_summary"], str) and payload["short_summary"]:
             short_summary = payload["short_summary"]
-            long_summary = payload.get("long_summary", "")
-            key_takeaways = payload.get("key_takeaways", [])
-            keywords = payload.get("keywords", [])
+            long_summary = str(payload.get("long_summary", ""))
+            raw_takeaways = payload.get("key_takeaways", [])
+            key_takeaways = [str(x) for x in raw_takeaways] if isinstance(raw_takeaways, list) else []
+            raw_keywords = payload.get("keywords", [])
+            keywords = [str(x) for x in raw_keywords] if isinstance(raw_keywords, list) else []
         else:
             full_text = " ".join(s.text for s in segments)
             analysis = _analyze_episode(full_text, title)
@@ -250,7 +262,8 @@ def ask_question(request: AskRequest) -> AskResponse:
 @router.post("/ask/stream")
 async def stream_question(request: AskRequest) -> StreamingResponse:
     """Stream LangGraph node events and final answer in real-time via Server-Sent Events."""
-    async def event_generator() -> AsyncGenerator[str, None]:
+
+    async def event_generator() -> AsyncGenerator[str]:
         initial_state = {
             "question": request.question,
             "documents": [],

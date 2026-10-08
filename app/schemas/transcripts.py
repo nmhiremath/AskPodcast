@@ -1,4 +1,5 @@
 """Transcript domain models: Segment, Chunk, and Show."""
+
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator

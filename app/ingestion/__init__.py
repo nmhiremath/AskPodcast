@@ -1,4 +1,5 @@
 """Ingestion package: adapters and transcript chunking."""
+
 from app.ingestion.chunking import chunk_segments
 from app.ingestion.youtube import (
     captions_to_segments,

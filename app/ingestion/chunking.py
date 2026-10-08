@@ -2,6 +2,7 @@
 
 Uses a word-count sliding window while preserving exact timestamp bounds.
 """
+
 from app.schemas import Chunk, Segment
 
 
@@ -11,7 +12,7 @@ def chunk_segments(
     overlap_words: int = 40,
 ) -> list[Chunk]:
     """Merge contiguous segments into chunks of ~target_words with overlap.
-    
+
     If the speaker changes, we can also force a boundary to keep speaker attribution crisp.
     """
     if not segments:
